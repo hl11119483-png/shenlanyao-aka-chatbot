@@ -68,6 +68,69 @@ INTERCEPT_MAP = {
 }
 
 
+# ─────────────────────────────────────────────
+# Session 狀態管理（記憶每位用戶的對話狀態）
+# ─────────────────────────────────────────────
+# 狀態值定義：
+#   None / 不存在  → 一般對話
+#   "awaiting_package_interest"  → 剛看完套餐推薦，等待用戶是否想看專屬方案
+#   "awaiting_package_choice"    → 已展示三個方案，等待用戶選擇
+USER_SESSION: dict[str, str] = {}
+
+# 套餐引導：步驟二回覆（展示三個方案）
+_PACKAGE_MENU_TEXT = (
+    "好的... 慢慢來...🥱 阿卡幫你把方案找出來了，我們有這三個專屬設計：\n"
+    "• 💻 「上班小資族」\n"
+    "🏸 「運動修復專案」\n"
+    "🧱 「重度勞動者」\n"
+    "你覺得自己比較像哪一種呢...？想看哪一個的詳細內容，直接輸入專案名稱跟阿卡說喔...🦥🌿"
+)
+
+# 套餐引導：步驟三各方案詳細內容
+_PACKAGE_DETAIL = {
+    "上班小資族": (
+        "💻 上班小資族專屬方案...🥱\n"
+        "• 肩頸舒活體驗套餐/65mins｜$1300（原$1400）\n"
+        "  (45分鐘推拿＋刮痧/拔罐2選1)\n"
+        "• 久坐全息放鬆套餐/105mins｜$1700（原$1900）\n"
+        "  (60分鐘推拿＋刮痧＋拔罐)\n"
+        "• 全身筋絡尊榮套餐/150mins｜$2600（原$2800）\n"
+        "  (60分鐘推拿＋刮痧＋拔罐＋洗頭頭部舒壓)\n"
+        "想預約的話，直接點選單的「線上預約」，或是跟阿卡說喔...🌿"
+    ),
+    "運動修復專案": (
+        "🏸 運動修復專案...🥱\n"
+        "• 運動後速效恢復套餐/90mins｜$1500（原$1700）\n"
+        "  (油推＋推拿＋拔罐)\n"
+        "• 深層肌筋膜放鬆套餐/135mins｜$2200（原$2400）\n"
+        "  (油推＋推拿90分鐘＋刮痧＋拔罐)\n"
+        "• 全能運動放鬆套餐/150mins｜$2700（原$3100）\n"
+        "  (油推＋推拿120分鐘＋筋膜刀＋拔罐)\n"
+        "想預約的話，直接點選單的「線上預約」，或是跟阿卡說喔...🌿"
+    ),
+    "重度勞動者": (
+        "🧱 重度勞動者專屬方案...🥱\n"
+        "• 筋骨快效舒緩套餐/90mins｜$1600（原$1800）\n"
+        "  (75分鐘推拿＋刮痧 or 拔罐)\n"
+        "• 深度強效放鬆套餐/135mins｜$2400（原$2600）\n"
+        "  (詳細內容請洽師傅)\n"
+        "想預約的話，直接點選單的「線上預約」，或是跟阿卡說喔...🌿"
+    ),
+}
+
+# 套餐引導：步驟一附加文字（接在套餐圖片後面）
+_PACKAGE_FOLLOWUP_TEXT = (
+    "• 啊，對了... 阿卡剛剛伸了個懶腰，想到最近有找到針對不同族群量身打造的「專屬方案」喔..."
+    " 會想看看嗎？🌿 想看的話跟阿卡說喔..."
+)
+
+# 「同意看方案」的關鍵字（只在 awaiting_package_interest 狀態下觸發）
+_AGREE_KEYWORDS = {"想看", "好啊", "好", "看看", "方案", "看方案", "好的", "可以", "要", "想", "當然", "ok", "OK", "好喔"}
+
+# 「套餐推薦」觸發關鍵字（含部分匹配）
+_PACKAGE_TRIGGER_KEYWORDS = {"套餐推薦", "推薦套餐", "推薦方案", "有什麼套餐", "套餐", "方案推薦"}
+
+
 def check_intercept(text: str):
     """
     前置攔截器：完全匹配關鍵字時，直接回傳對應的 LINE 訊息，不呼叫 LLM API。
@@ -84,6 +147,66 @@ def check_intercept(text: str):
             )
         ]
         return messages
+    return None
+
+
+def check_package_flow(user_id: str, text: str):
+    """
+    套餐引導多輪對話流程（Session 狀態機）。
+    回傳 list[Message] 或 None（None 表示不由此函式處理）。
+
+    狀態流：
+      [任意] 含套餐觸發關鍵字
+          → 回覆套餐圖片 + 附加引導文字
+          → 狀態設為 awaiting_package_interest
+
+      [awaiting_package_interest] 用戶表達同意
+          → 回覆三方案選單
+          → 狀態設為 awaiting_package_choice
+
+      [awaiting_package_choice] 用戶輸入方案名稱
+          → 回覆方案詳細內容
+          → 清除狀態
+    """
+    stripped = text.strip()
+    state = USER_SESSION.get(user_id)
+
+    # ── 步驟三：用戶選擇具體方案 ──
+    if state == "awaiting_package_choice":
+        for key in _PACKAGE_DETAIL:
+            if key in stripped:
+                USER_SESSION.pop(user_id, None)
+                return [TextMessage(text=_PACKAGE_DETAIL[key])]
+        # 輸入不在方案清單內 → 保持狀態，讓 LLM 處理
+        return None
+
+    # ── 步驟二：用戶表達想看方案 ──
+    if state == "awaiting_package_interest":
+        if any(kw in stripped for kw in _AGREE_KEYWORDS):
+            USER_SESSION[user_id] = "awaiting_package_choice"
+            return [TextMessage(text=_PACKAGE_MENU_TEXT)]
+        else:
+            # 用戶說了其他話 → 清除狀態，交還 LLM 處理
+            USER_SESSION.pop(user_id, None)
+            return None
+
+    # ── 步驟一：觸發套餐推薦 ──
+    if any(kw in stripped for kw in _PACKAGE_TRIGGER_KEYWORDS):
+        BASE = "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/"
+        recommend_url = BASE + "aka-recommend.png"
+        USER_SESSION[user_id] = "awaiting_package_interest"
+        return [
+            TextMessage(
+                text="好喔...🥱 每個人的狀況不一樣... 你是第一次來嗎？"
+                     "或者想試試『深層肌筋膜油推』？還是特別的『頭部整復SPA』...？🦥"
+            ),
+            ImageMessage(
+                original_content_url=recommend_url,
+                preview_image_url=recommend_url
+            ),
+            TextMessage(text=_PACKAGE_FOLLOWUP_TEXT),
+        ]
+
     return None
 
 
@@ -520,6 +643,19 @@ def handle_message(event):
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
                     messages=intercepted
+                )
+            )
+            return
+
+        # ──────────────────────────────────────
+        # 【套餐引導流程】Session 狀態機（多輪對話）
+        # ──────────────────────────────────────
+        package_messages = check_package_flow(user_id, user_message)
+        if package_messages is not None:
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=package_messages
                 )
             )
             return
