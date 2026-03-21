@@ -32,7 +32,7 @@ if not OPENAI_API_KEY:
 
 handler = WebhookHandler(CHANNEL_SECRET)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
-openai_client = OpenAI()
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ─────────────────────────────────────────────
 # 常數：圖片 URL
@@ -134,12 +134,16 @@ def call_llm(user_message: str) -> str:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_message}
             ],
+            response_format={"type": "json_object"},
             max_tokens=512,
             temperature=0.7
         )
-        return response.choices[0].message.content.strip()
+        raw = response.choices[0].message.content.strip()
+        app.logger.info(f"LLM 原始回覆: {raw}")
+        return raw
     except Exception as e:
-        app.logger.error(f"LLM API 呼叫失敗: {e}")
+        app.logger.error(f"LLM API 呼叫失敗: {type(e).__name__}: {e}")
+        app.logger.error(traceback.format_exc())
         return None
 
 
@@ -400,7 +404,8 @@ def handle_message(event):
 
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             # JSON 解析失敗 → 統一回覆
-            app.logger.error(f"JSON 解析失敗: {e}\n原始回覆: {raw_response}")
+            app.logger.error(f"JSON 解析失敗: {type(e).__name__}: {e}")
+            app.logger.error(f"原始 LLM 回覆內容: {repr(raw_response)}")
             fallback_text = "哎呀...阿卡剛剛伸了個大懶腰睡著了...🥱 請問可以再說一次嗎？🌿"
             line_bot_api.reply_message(
                 ReplyMessageRequest(
@@ -411,7 +416,8 @@ def handle_message(event):
 
         except Exception as e:
             # 其他未預期錯誤
-            app.logger.error(f"處理訊息時發生未預期錯誤: {e}\n{traceback.format_exc()}")
+            app.logger.error(f"處理訊息時發生未預期錯誤: {type(e).__name__}: {e}")
+            app.logger.error(traceback.format_exc())
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
