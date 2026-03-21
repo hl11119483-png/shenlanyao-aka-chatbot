@@ -54,8 +54,8 @@ INTERCEPT_MAP = {
         "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka.png"
     },
     "[選單-店內資訊]": {
-        "text": "這是阿卡休息發呆的好地方... 🌴 每天10點到晚上10點，隨時來把壓力放下... 🥱",
-        "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6192.jpg"
+        "text": "有任何想知道的資訊可以先看我們的選單，或是要稍待片刻，阿卡去請師傅來 😃",
+        "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka-system-building.png"
     },
     "[選單-交通&位置]": {
         "text": "我們在東光路852巷20號1樓... 🦥\n跟著地圖走就不會迷路囉 👉 https://maps.app.goo.gl/f7Br1zswqzTuWxr36\n慢慢走過來，我們在這裡等你... 🌿",
@@ -129,7 +129,7 @@ SYSTEM_PROMPT = """你是「阿卡」，伸懶腰傳統整復推拿會館的 AI 
    {"text": "耶...我們滿一百天了...🎉 這是最新的百日慶特別活動喔... 阿卡準備了滿滿的驚喜給你...來看看吧...🦥✨", "image_urls": ["https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/centenary-1.jpg","https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/centenary-2.png","https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/centenary-3.png"], "action": "none", "notify_admin": false}
 
 5. 客人輸入「[選單-店內資訊]」或問店內資訊：
-   {"text": "這是阿卡休息發呆的好地方... 🌴 每天10點到晚上10點，隨時來把壓力放下... 🥱", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6192.jpg", "action": "none", "notify_admin": false}
+   {"text": "有任何想知道的資訊可以先看我們的選單，或是要稍待片刻，阿卡去請師傅來 😃", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka-system-building.png", "action": "none", "notify_admin": false}
 
 6. 客人問交通位置、地址、怎麼去或輸入「[選單-交通&位置]」：
    {"text": "我們在東光路852巷20號1樓... 🦥\n跟著地圖走就不會迷路囉 👉 https://maps.app.goo.gl/f7Br1zswqzTuWxr36\n慢慢走過來，我們在這裡等你... 🌿", "image_urls": ["https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6192.jpg"], "action": "none", "notify_admin": false}
