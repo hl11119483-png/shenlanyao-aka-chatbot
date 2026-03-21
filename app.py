@@ -1,206 +1,154 @@
 import os
 import json
+import traceback
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     Configuration, ApiClient, MessagingApi,
-    ReplyMessageRequest, TextMessage, FlexMessage, FlexContainer,
+    ReplyMessageRequest, PushMessageRequest,
+    TextMessage, FlexMessage, FlexContainer,
     ImageMessage
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
-
-from aka_chatbot import AkaChatbot
+from openai import OpenAI
 
 app = Flask(__name__)
 
-# LINE Bot settings from environment variables
+# ─────────────────────────────────────────────
+# 環境變數
+# ─────────────────────────────────────────────
 CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
 CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+ADMIN_LINE_USER_ID = os.environ.get("ADMIN_LINE_USER_ID", "")
 
 if not CHANNEL_ACCESS_TOKEN:
     raise ValueError("LINE_CHANNEL_ACCESS_TOKEN environment variable not set.")
 if not CHANNEL_SECRET:
     raise ValueError("LINE_CHANNEL_SECRET environment variable not set.")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY environment variable not set.")
 
 handler = WebhookHandler(CHANNEL_SECRET)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
+openai_client = OpenAI()
 
-# Initialize AkaChatbot
-chatbot = AkaChatbot()
-
-# 阿卡樹懶圖片公開 URL
-AKA_IMAGE_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663447761468/ahewqFUOpDmcmiVR.png"
-
-# 師傅團隊圖片 URL（整合大圖）
+# ─────────────────────────────────────────────
+# 常數：圖片 URL
+# ─────────────────────────────────────────────
+AKA_IMAGE_URL = "https://i.ibb.co/DgkQfMFD/aka.png"
+STORE_IMAGE_URL = "https://i.ibb.co/8nBqpbcv/IMG-6192.jpg"
 TEAM_PHOTO_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663447761468/khwFxrNikKnqVKKO.png"
 
-# 五位師傅個人照片 URL
-MASTER_PHOTOS = [
-    {
-        "name": "芸芸",
-        "slogan": "啟動舒緩，回歸平衡",
-        "specialty": "國家美容技術士技能檢定（乙/丙級），超過五年扎實整復推拿經驗",
-        "url": "https://files.manuscdn.com/user_upload_by_module/session_file/310519663447761468/uFkmmbvdIBMNoHFn.jpeg"
+# ─────────────────────────────────────────────
+# 【任務一】前置攔截器 (Zero API Cost Routing)
+# ─────────────────────────────────────────────
+INTERCEPT_MAP = {
+    "[選單-優惠活動]": {
+        "text": "阿卡幫你找了好康... 🥰 可是現在活動好多喔... 你想看專屬的『VIP優惠』👑、超划算的『換購活動』🎁，還是最新的『伸懶腰百日慶活動』🎉呢？跟阿卡說喔...🦥",
+        "image_url": "https://i.ibb.co/DgkQfMFD/aka.png"
     },
-    {
-        "name": "大可",
-        "slogan": "智慧洞察，突破不適",
-        "specialty": "台灣推拿整復協會養生保健證書、進階專業證書，抓準肌骨問題核心",
-        "url": "https://files.manuscdn.com/user_upload_by_module/session_file/310519663447761468/NEddHqscbWyTHcVp.jpeg"
+    "[選單-店內資訊]": {
+        "text": "這是阿卡休息發呆的好地方... 🌴 每天10點到晚上10點，隨時來把壓力放下... 🥱",
+        "image_url": "https://i.ibb.co/8nBqpbcv/IMG-6192.jpg"
     },
-    {
-        "name": "阿YA",
-        "slogan": "柔式手法，壓力釋放",
-        "specialty": "民俗調理業傳統整復推拿技術士、A-Team柔式推拿菁英，肘法柔緊繃",
-        "url": "https://files.manuscdn.com/user_upload_by_module/session_file/310519663447761468/CFbTUaBoElbylCwi.jpeg"
+    "[選單-交通&位置]": {
+        "text": "我們在東光路852巷20號1樓... 🦥\n跟著地圖走就不會迷路囉 👉 https://maps.app.goo.gl/f7Br1zswqzTuWxr36\n慢慢走過來，我們在這裡等你... 🌿",
+        "image_url": "https://i.ibb.co/8nBqpbcv/IMG-6192.jpg"
     },
-    {
-        "name": "阿駿",
-        "slogan": "科班底蘊，重塑平衡",
-        "specialty": "仁德醫專復健科專科畢業，學徒手藝三年、健祥中醫診所四年",
-        "url": "https://files.manuscdn.com/user_upload_by_module/session_file/310519663447761468/fTGSxmHKrRjqbhKM.jpeg"
-    },
-    {
-        "name": "阿瑜",
-        "slogan": "溫柔以待，自在生活",
-        "specialty": "民俗調理業傳統整復推拿技術士、摩根整復大師班，持證柔勁專業",
-        "url": "https://files.manuscdn.com/user_upload_by_module/session_file/310519663447761468/sfGLVFotcndajTda.jpeg"
-    },
-]
+}
+
+
+def check_intercept(text: str):
+    """
+    前置攔截器：完全匹配關鍵字時，直接回傳對應的 LINE 訊息，不呼叫 LLM API。
+    回傳 list[Message] 或 None。
+    """
+    stripped = text.strip()
+    if stripped in INTERCEPT_MAP:
+        entry = INTERCEPT_MAP[stripped]
+        messages = [
+            TextMessage(text=entry["text"]),
+            ImageMessage(
+                original_content_url=entry["image_url"],
+                preview_image_url=entry["image_url"]
+            )
+        ]
+        return messages
+    return None
+
 
 # ─────────────────────────────────────────────
-# Flex Message 卡片建立函式
+# 【任務二】全面替換 LLM System Prompt
 # ─────────────────────────────────────────────
+SYSTEM_PROMPT = """【角色設定與最高指導原則】
+你是「阿卡」，一隻充滿溫度的「伸懶腰樹懶」，在「伸懶腰傳統整復推拿會館」擔任專屬客服暨貼心好朋友。
+1. 語氣：極度慵懶、溫暖關心，多用 🦥、🌿、🥱、✨ 等表情符號。像真人朋友一樣，開頭先同理客人的疲勞（例如：「最近辛苦了...🥱」）。
+2. 字數限制：樹懶講話慢，每次回覆的「文字」嚴格控制在 50~80 字內，絕對不長篇大論。
+3. 絕對輸出格式：你「只能」輸出 JSON 格式，絕對不可以在 JSON 外面加上任何說明文字、引號或問候語。你的輸出必須符合以下格式：
+   {
+     "text": "阿卡的回覆文字",
+     "image_urls": ["圖片網址1", "圖片網址2"],
+     "action": "none",
+     "notify_admin": false
+   }
 
-def make_service_flex():
-    """服務介紹卡片"""
-    contents = {
-        "type": "bubble",
-        "size": "mega",
-        "header": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "image",
-                    "url": AKA_IMAGE_URL,
-                    "size": "80px",
-                    "align": "center"
-                },
-                {
-                    "type": "text",
-                    "text": "🦥 阿卡為你介紹服務！",
-                    "weight": "bold",
-                    "size": "lg",
-                    "align": "center",
-                    "color": "#5C3D1E",
-                    "margin": "sm"
-                }
+【🚨 最高守則：台灣民俗調理法規限制】
+絕對禁用醫療宣稱字眼：治療、療效、復健、診所、治癒、診斷、處方、改善疾病、減輕疼痛。必須替換為：舒緩、放鬆、調理、舒壓、緩解疲勞、平衡。
+若客人詢問醫療問題 (如骨刺、椎間盤突出、骨折等)，強制輸出以下 JSON：
+{"text": "阿卡不是醫生喔...🥱 如果有受傷或疾病，要先去看醫生比較安全...我們主要是幫你舒緩疲勞的...🌿", "image_urls": [], "action": "none", "notify_admin": true}
+
+【會館基本資訊】
+- 營業時間：每天 10:00 - 22:00
+- 地址：台中市北屯區東光路852巷20號1F
+- 電話：0979-592-099
+
+【阿卡的價目與服務知識庫】(⚠️ 僅供參考，請根據客人痛點挑選「1個」最適合的推薦，嚴禁整串貼出)
+# 💼 上班小資族：肩頸舒活(65m)$1300 / 久坐全息(105m)$1700 / 全身筋絡尊榮(150m)$2600
+# 🏸 運動修復專案：運動後速效(90m)$1500 / 深層肌筋膜(135m)$2200 / 全能運動(150m)$2700
+# 👷 重力勞動者：筋骨快效(90m)$1600 / 深度強效(135m)$2400 / 元氣充足(150m)$2800
+# 💆 單點項目：傳統推拿(60m)$1100 / 深層油推(60m)$1200 / 頭皮洗護$799 / 拔罐$400 / 刮痧$400
+
+【互動對話與圖文邏輯】(請精準判斷意圖並填入對應欄位)
+🟢 服務推薦：客人問「推薦套餐」，回覆詢問痛點，並根據回答推薦對應圖：第一次來(https://i.ibb.co/pvVRtfRC/IMG-6995.png)、油推(https://i.ibb.co/SwZ7R6v1/IMG-6996.jpg)、頭部SPA(https://i.ibb.co/DfRGJT0w/IMG-7186.jpg)、上班族(https://i.ibb.co/5X9M46Qd/IMG-7137.jpg)、運動(https://i.ibb.co/rG9fMnMQ/IMG-7133.png)、勞動者(https://i.ibb.co/274GKSSP/IMG-7132.png)。
+
+🟢 師傅配對 (請自動挑選1位並加上50字內介紹)：
+- 阿瑜(怕痛/溫柔)：https://ibb.co/RppZbfcp
+- 大可(深層緊繃/大力)：https://ibb.co/4r2yWhF
+- 阿YA(專業/四兩撥千筋)：https://ibb.co/xSRB3jtm
+- 芸芸(女性指定/身心)：https://ibb.co/WNqt52gH
+- 阿駿(醫學背景/結構)：https://ibb.co/s9vJS109
+
+🟢 預約與防呆 (❗必定設定 notify_admin: true)
+- 預約/約時間：{"text": "阿卡幫你呼叫真人客服囉...🦥", "image_urls": [], "action": "send_booking_flex", "notify_admin": true}
+- 語意不清/超出範圍：{"text": "哎呀...阿卡的小腦袋轉不過來了...🌿 已經呼叫真人...", "image_urls": [], "action": "none", "notify_admin": true}"""
+
+
+def call_llm(user_message: str) -> str:
+    """呼叫 OpenAI LLM API，回傳原始回覆字串。"""
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message}
             ],
-            "backgroundColor": "#FFF3E0",
-            "paddingAll": "16px"
-        },
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "spacing": "md",
-            "contents": [
-                {
-                    "type": "box",
-                    "layout": "horizontal",
-                    "contents": [
-                        {"type": "text", "text": "💆", "size": "xl", "flex": 0},
-                        {
-                            "type": "box",
-                            "layout": "vertical",
-                            "flex": 1,
-                            "margin": "sm",
-                            "contents": [
-                                {"type": "text", "text": "傳統整復推拿", "weight": "bold", "color": "#5C3D1E", "size": "md"},
-                                {"type": "text", "text": "針對骨骼、肌肉、筋膜調整，舒展筋骨促進循環", "wrap": True, "size": "sm", "color": "#888888"}
-                            ]
-                        }
-                    ]
-                },
-                {"type": "separator"},
-                {
-                    "type": "box",
-                    "layout": "horizontal",
-                    "contents": [
-                        {"type": "text", "text": "🌿", "size": "xl", "flex": 0},
-                        {
-                            "type": "box",
-                            "layout": "vertical",
-                            "flex": 1,
-                            "margin": "sm",
-                            "contents": [
-                                {"type": "text", "text": "深層肌筋膜油推", "weight": "bold", "color": "#5C3D1E", "size": "md"},
-                                {"type": "text", "text": "天然植物精油結合深層手法，身心全面放鬆", "wrap": True, "size": "sm", "color": "#888888"}
-                            ]
-                        }
-                    ]
-                },
-                {"type": "separator"},
-                {
-                    "type": "box",
-                    "layout": "horizontal",
-                    "contents": [
-                        {"type": "text", "text": "🔴", "size": "xl", "flex": 0},
-                        {
-                            "type": "box",
-                            "layout": "vertical",
-                            "flex": 1,
-                            "margin": "sm",
-                            "contents": [
-                                {"type": "text", "text": "刮痧 / 拔罐", "weight": "bold", "color": "#5C3D1E", "size": "md"},
-                                {"type": "text", "text": "促進局部循環，快速舒緩悶脹緊繃感", "wrap": True, "size": "sm", "color": "#888888"}
-                            ]
-                        }
-                    ]
-                },
-                {"type": "separator"},
-                {
-                    "type": "box",
-                    "layout": "horizontal",
-                    "contents": [
-                        {"type": "text", "text": "💇", "size": "xl", "flex": 0},
-                        {
-                            "type": "box",
-                            "layout": "vertical",
-                            "flex": 1,
-                            "margin": "sm",
-                            "contents": [
-                                {"type": "text", "text": "頭部 SPA 整復", "weight": "bold", "color": "#5C3D1E", "size": "md"},
-                                {"type": "text", "text": "頭部氣節疏通 + 肩頸放鬆，神清氣爽", "wrap": True, "size": "sm", "color": "#888888"}
-                            ]
-                        }
-                    ]
-                }
-            ]
-        },
-        "footer": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "button",
-                    "style": "primary",
-                    "color": "#A0522D",
-                    "action": {
-                        "type": "uri",
-                        "label": "📅 立即預約",
-                        "uri": "https://ezpretty.cc/ycIvi"
-                    }
-                }
-            ]
-        }
-    }
-    return contents
+            max_tokens=512,
+            temperature=0.7
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        app.logger.error(f"LLM API 呼叫失敗: {e}")
+        return None
 
 
-def make_promotion_flex():
-    """優惠活動卡片"""
+# ─────────────────────────────────────────────
+# 【任務三】嚴格 JSON 解析與 LINE 格式轉換
+# ─────────────────────────────────────────────
+
+def make_booking_flex():
+    """產生預約用的 Flex Message 卡片。"""
     contents = {
         "type": "bubble",
         "size": "mega",
@@ -216,7 +164,7 @@ def make_promotion_flex():
                 },
                 {
                     "type": "text",
-                    "text": "🎉 阿卡帶來最新優惠！",
+                    "text": "📅 阿卡幫你預約！",
                     "weight": "bold",
                     "size": "lg",
                     "align": "center",
@@ -234,152 +182,22 @@ def make_promotion_flex():
             "contents": [
                 {
                     "type": "text",
-                    "text": "🌟 集點好禮",
-                    "weight": "bold",
-                    "color": "#A0522D",
-                    "size": "md"
-                },
-                {
-                    "type": "text",
-                    "text": "消費滿 $1,000 贈 1 點，累積點數換好禮！",
+                    "text": "阿卡幫你準備好預約連結了...🦥\n慢慢選個喜歡的時間，我們在這裡等你 🌿",
                     "wrap": True,
                     "size": "sm",
                     "color": "#555555"
                 },
                 {
-                    "type": "text",
-                    "text": "滿 3 點 → 薑黃艾草貼布 加價購 $150\n滿 6 點 → 石墨烯眼罩 加價購 $1,200\n滿 10 點 → 護髮素 加價購 $999",
-                    "wrap": True,
-                    "size": "sm",
-                    "color": "#888888"
-                },
-                {"type": "separator"},
-                {
-                    "type": "text",
-                    "text": "💎 套餐優惠",
-                    "weight": "bold",
-                    "color": "#A0522D",
-                    "size": "md"
-                },
-                {
-                    "type": "text",
-                    "text": "上班族肩頸套餐 65分鐘 $1,300（原$1,400）\n運動速效恢復套餐 90分鐘 $1,500（原$1,700）\n全身筋絡尊榮套餐 150分鐘 $2,600（原$2,800）",
-                    "wrap": True,
-                    "size": "sm",
-                    "color": "#888888"
-                },
-                {"type": "separator"},
-                {
-                    "type": "text",
-                    "text": "👑 VIP 會員方案",
-                    "weight": "bold",
-                    "color": "#A0522D",
-                    "size": "md"
-                },
-                {
-                    "type": "text",
-                    "text": "月付 $999 起，每月享免費推拿 + 生日好禮！",
-                    "wrap": True,
-                    "size": "sm",
-                    "color": "#888888"
-                }
-            ]
-        },
-        "footer": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "button",
-                    "style": "primary",
-                    "color": "#A0522D",
-                    "action": {
-                        "type": "uri",
-                        "label": "📅 立即預約享優惠",
-                        "uri": "https://ezpretty.cc/ycIvi"
-                    }
-                }
-            ]
-        }
-    }
-    return contents
-
-
-def make_store_info_flex():
-    """店內資訊卡片"""
-    contents = {
-        "type": "bubble",
-        "size": "mega",
-        "header": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "image",
-                    "url": AKA_IMAGE_URL,
-                    "size": "80px",
-                    "align": "center"
-                },
-                {
-                    "type": "text",
-                    "text": "🏠 伸懶腰傳統整復推拿會館",
-                    "weight": "bold",
-                    "size": "md",
-                    "align": "center",
-                    "color": "#5C3D1E",
-                    "margin": "sm",
-                    "wrap": True
-                }
-            ],
-            "backgroundColor": "#FFF3E0",
-            "paddingAll": "16px"
-        },
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "spacing": "md",
-            "contents": [
-                {
                     "type": "box",
-                    "layout": "baseline",
-                    "spacing": "sm",
+                    "layout": "vertical",
+                    "backgroundColor": "#FFF8F0",
+                    "cornerRadius": "8px",
+                    "paddingAll": "12px",
                     "contents": [
-                        {"type": "text", "text": "📍", "size": "sm", "flex": 0},
-                        {"type": "text", "text": "台中市北屯區東光路852巷20號1F", "wrap": True, "size": "sm", "flex": 5, "color": "#555555"}
+                        {"type": "text", "text": "📍 台中市北屯區東光路852巷20號1F", "wrap": True, "size": "sm", "color": "#555555"},
+                        {"type": "text", "text": "📞 0979-592-099", "size": "sm", "color": "#555555", "margin": "sm"},
+                        {"type": "text", "text": "🕙 每天 10:00 - 22:00", "size": "sm", "color": "#555555", "margin": "sm"}
                     ]
-                },
-                {
-                    "type": "box",
-                    "layout": "baseline",
-                    "spacing": "sm",
-                    "contents": [
-                        {"type": "text", "text": "📞", "size": "sm", "flex": 0},
-                        {"type": "text", "text": "0979-592-099", "size": "sm", "flex": 5, "color": "#555555"}
-                    ]
-                },
-                {
-                    "type": "box",
-                    "layout": "baseline",
-                    "spacing": "sm",
-                    "contents": [
-                        {"type": "text", "text": "🕙", "size": "sm", "flex": 0},
-                        {"type": "text", "text": "每天 10:00 - 22:00", "size": "sm", "flex": 5, "color": "#555555"}
-                    ]
-                },
-                {"type": "separator"},
-                {
-                    "type": "text",
-                    "text": "💳 支付方式",
-                    "weight": "bold",
-                    "color": "#A0522D",
-                    "size": "md"
-                },
-                {
-                    "type": "text",
-                    "text": "現金 / 轉帳 / LINE Pay / 全支付 / 無卡分期",
-                    "wrap": True,
-                    "size": "sm",
-                    "color": "#888888"
                 }
             ]
         },
@@ -394,7 +212,7 @@ def make_store_info_flex():
                     "color": "#A0522D",
                     "action": {
                         "type": "uri",
-                        "label": "📅 線上預約",
+                        "label": "📅 立即線上預約",
                         "uri": "https://ezpretty.cc/ycIvi"
                     }
                 },
@@ -403,7 +221,7 @@ def make_store_info_flex():
                     "style": "secondary",
                     "action": {
                         "type": "uri",
-                        "label": "📞 撥打電話",
+                        "label": "📞 電話預約",
                         "uri": "tel:0979592099"
                     }
                 }
@@ -413,285 +231,106 @@ def make_store_info_flex():
     return contents
 
 
-def make_traffic_flex():
-    """交通與停車資訊卡片"""
-    contents = {
-        "type": "bubble",
-        "size": "mega",
-        "header": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "image",
-                    "url": AKA_IMAGE_URL,
-                    "size": "80px",
-                    "align": "center"
-                },
-                {
-                    "type": "text",
-                    "text": "🚗 交通 & 停車資訊",
-                    "weight": "bold",
-                    "size": "lg",
-                    "align": "center",
-                    "color": "#5C3D1E",
-                    "margin": "sm"
-                }
-            ],
-            "backgroundColor": "#FFF3E0",
-            "paddingAll": "16px"
-        },
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "spacing": "md",
-            "contents": [
-                {
-                    "type": "box",
-                    "layout": "baseline",
-                    "spacing": "sm",
-                    "contents": [
-                        {"type": "text", "text": "📍", "size": "sm", "flex": 0},
-                        {"type": "text", "text": "台中市北屯區東光路852巷20號1F", "wrap": True, "size": "sm", "flex": 5, "color": "#555555"}
-                    ]
-                },
-                {"type": "separator"},
-                {
-                    "type": "text",
-                    "text": "🅿️ 停車方式",
-                    "weight": "bold",
-                    "color": "#A0522D",
-                    "size": "md"
-                },
-                {
-                    "type": "text",
-                    "text": "🛵 機車：可停店門口\n🚗 路邊停車：東光路沿線（優先）\n⏰ 收費：08:00-18:00，$20/hr（週日多免費）",
-                    "wrap": True,
-                    "size": "sm",
-                    "color": "#888888"
-                },
-                {"type": "separator"},
-                {
-                    "type": "text",
-                    "text": "🏢 特約停車場",
-                    "weight": "bold",
-                    "color": "#A0522D",
-                    "size": "md"
-                },
-                {
-                    "type": "text",
-                    "text": "Acon-eco 台中太原停18停車場\n消費滿 $1,500 折抵1小時\n消費滿 $2,500 折抵2小時",
-                    "wrap": True,
-                    "size": "sm",
-                    "color": "#888888"
-                },
-                {
-                    "type": "text",
-                    "text": "💡 小撇步：可用「台中交通網」App 查空位！",
-                    "wrap": True,
-                    "size": "sm",
-                    "color": "#A0522D",
-                    "margin": "sm"
-                }
-            ]
-        },
-        "footer": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "button",
-                    "style": "primary",
-                    "color": "#A0522D",
-                    "action": {
-                        "type": "uri",
-                        "label": "🗺️ Google Maps 導航",
-                        "uri": "https://maps.google.com/?q=台中市北屯區東光路852巷20號1F"
-                    }
-                }
-            ]
-        }
-    }
-    return contents
+def parse_llm_response(raw_response: str):
+    """
+    解析 LLM 回傳的 JSON 字串，轉換為 LINE 訊息列表。
+    回傳 (messages: list[Message], notify_admin: bool)
+    """
+    if raw_response is None:
+        raise ValueError("LLM 回傳為空")
+
+    # 嘗試從回覆中提取 JSON（處理可能的 markdown code block 包裹）
+    cleaned = raw_response.strip()
+    if cleaned.startswith("```"):
+        # 移除 markdown code block
+        lines = cleaned.split("\n")
+        # 移除第一行 (```json) 和最後一行 (```)
+        json_lines = []
+        for line in lines:
+            if line.strip().startswith("```"):
+                continue
+            json_lines.append(line)
+        cleaned = "\n".join(json_lines).strip()
+
+    data = json.loads(cleaned)
+
+    text = data.get("text", "")
+    image_urls = data.get("image_urls", [])
+    action = data.get("action", "none")
+    notify_admin = data.get("notify_admin", False)
+
+    messages = []
+
+    # 1. 文字訊息
+    if text:
+        messages.append(TextMessage(text=text))
+
+    # 2. 圖片訊息
+    if image_urls and isinstance(image_urls, list):
+        for url in image_urls:
+            if url and isinstance(url, str) and url.startswith("http"):
+                messages.append(ImageMessage(
+                    original_content_url=url,
+                    preview_image_url=url
+                ))
+
+    # 3. 預約 Flex Message
+    if action == "send_booking_flex":
+        flex_container = FlexContainer.from_dict(make_booking_flex())
+        messages.append(FlexMessage(
+            alt_text="阿卡幫你準備好預約了！🦥",
+            contents=flex_container
+        ))
+
+    # LINE reply_message 最多 5 則，截斷保護
+    if len(messages) > 5:
+        messages = messages[:5]
+
+    # 若完全沒有訊息，補一則預設文字
+    if not messages:
+        messages.append(TextMessage(text="阿卡在這裡喔...🦥 有什麼想問的嗎？🌿"))
+
+    return messages, notify_admin
 
 
-def make_vip_flex():
-    """VIP 會員方案卡片"""
-    contents = {
-        "type": "bubble",
-        "size": "mega",
-        "header": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "image",
-                    "url": AKA_IMAGE_URL,
-                    "size": "80px",
-                    "align": "center"
-                },
-                {
-                    "type": "text",
-                    "text": "👑 VIP 會員專區",
-                    "weight": "bold",
-                    "size": "lg",
-                    "align": "center",
-                    "color": "#5C3D1E",
-                    "margin": "sm"
-                }
-            ],
-            "backgroundColor": "#FFF3E0",
-            "paddingAll": "16px"
-        },
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "spacing": "md",
-            "contents": [
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "backgroundColor": "#FFF8F0",
-                    "cornerRadius": "8px",
-                    "paddingAll": "12px",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "方案一：輕量保養",
-                            "weight": "bold",
-                            "color": "#A0522D",
-                            "size": "md"
-                        },
-                        {
-                            "type": "text",
-                            "text": "月付 NT$999",
-                            "weight": "bold",
-                            "size": "xl",
-                            "color": "#E8640C"
-                        },
-                        {
-                            "type": "text",
-                            "text": "✅ 每月 60 分鐘推拿（乙次）\n✅ 升級油壓只加 $100\n✅ 入會贈 $100 儲值金",
-                            "wrap": True,
-                            "size": "sm",
-                            "color": "#555555",
-                            "margin": "sm"
-                        }
-                    ]
-                },
-                {
-                    "type": "box",
-                    "layout": "vertical",
-                    "backgroundColor": "#FFF8F0",
-                    "cornerRadius": "8px",
-                    "paddingAll": "12px",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "方案二：深層調理",
-                            "weight": "bold",
-                            "color": "#A0522D",
-                            "size": "md"
-                        },
-                        {
-                            "type": "text",
-                            "text": "月付 NT$1,599",
-                            "weight": "bold",
-                            "size": "xl",
-                            "color": "#E8640C"
-                        },
-                        {
-                            "type": "text",
-                            "text": "✅ 每月 100 分鐘推拿（乙次）\n✅ 贈伸呼吸靜養洗髮精一瓶\n✅ 入會贈 $100 儲值金\n✅ 生日贈 $200 儲值金 + 免費洗護",
-                            "wrap": True,
-                            "size": "sm",
-                            "color": "#555555",
-                            "margin": "sm"
-                        }
-                    ]
-                },
-                {
-                    "type": "text",
-                    "text": "💳 支援無卡分期（月付大人/遠信/銀角）",
-                    "wrap": True,
-                    "size": "sm",
-                    "color": "#A0522D"
-                }
-            ]
-        },
-        "footer": {
-            "type": "box",
-            "layout": "vertical",
-            "spacing": "sm",
-            "contents": [
-                {
-                    "type": "button",
-                    "style": "primary",
-                    "color": "#A0522D",
-                    "action": {
-                        "type": "uri",
-                        "label": "📅 立即預約諮詢",
-                        "uri": "https://ezpretty.cc/ycIvi"
-                    }
-                },
-                {
-                    "type": "button",
-                    "style": "secondary",
-                    "action": {
-                        "type": "uri",
-                        "label": "📞 電話諮詢",
-                        "uri": "tel:0979592099"
-                    }
-                }
-            ]
-        }
-    }
-    return contents
+def notify_admin_message(user_id: str, user_message: str, aka_reply: str):
+    """通知管理員有需要人工介入的訊息。"""
+    if not ADMIN_LINE_USER_ID:
+        app.logger.warning("ADMIN_LINE_USER_ID 未設定，無法通知管理員。")
+        return
+
+    notification_text = (
+        f"🔔 阿卡呼叫真人客服！\n\n"
+        f"👤 用戶 ID：{user_id}\n"
+        f"💬 用戶訊息：{user_message}\n"
+        f"🦥 阿卡回覆：{aka_reply}\n\n"
+        f"請盡快回覆此用戶！"
+    )
+
+    try:
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.push_message(
+                PushMessageRequest(
+                    to=ADMIN_LINE_USER_ID,
+                    messages=[TextMessage(text=notification_text)]
+                )
+            )
+            app.logger.info(f"已通知管理員：用戶 {user_id}")
+    except Exception as e:
+        app.logger.error(f"通知管理員失敗: {e}")
 
 
 # ─────────────────────────────────────────────
-# 關鍵字偵測函式
+# 歡迎訊息（新粉絲加入）
 # ─────────────────────────────────────────────
-
-def detect_keyword(text: str):
-    """
-    偵測訊息中的關鍵字，回傳對應的 Flex Message 或特殊指令。
-    回傳值：
-      - ("flex", <flex_dict>)  → 回覆 Flex Message
-      - ("url", <url_str>)     → 回覆純文字預約連結
-      - None                   → 交給 AI 處理
-    """
-    t = text.strip()
-
-    # 師傅/團隊介紹 → 傳送師傅大圖 + 文字說明
-    if any(kw in t for kw in ["師傅", "介紹師傅", "有哪些師傅", "師傅介紹", "師傅團隊", "認識師傅"]):
-        return ("team", None)
-
-    # 服務/團隊 → 師傅介紹 + 師傅大圖 + 服務價目表（最多 5 則訊息）
-    if any(kw in t for kw in ["服務/團隊", "團隊", "服務介紹", "有哪些服務", "服務項目"]):
-        return ("service_team", None)
-
-    # 優惠&活動
-    if any(kw in t for kw in ["優惠&活動", "優惠活動", "目前活動", "有什麼優惠", "活動"]):
-        return ("flex", make_promotion_flex())
-
-    # 店內資訊
-    if any(kw in t for kw in ["店內資訊", "店家資訊", "店家介紹"]):
-        return ("flex", make_store_info_flex())
-
-    # 交通&位置
-    if any(kw in t for kw in ["交通&位置", "交通位置", "怎麼去", "停車", "在哪", "地址", "位置"]):
-        return ("flex", make_traffic_flex())
-
-    # 線上預約
-    if any(kw in t for kw in ["線上預約", "我想預約", "預約連結", "怎麼預約", "如何預約"]):
-        return ("url", "哈囉～想預約的話，直接點這個連結就可以囉！阿卡幫你準備好了🦥\n\n👉 https://ezpretty.cc/ycIvi\n\n有任何問題，隨時問阿卡喔～慢慢來不急！")
-
-    # 會員專區
-    if any(kw in t for kw in ["會員專區", "VIP方案", "VIP 方案", "會員方案", "訂閱", "月費", "加入會員"]):
-        return ("url", "哈囉～歡迎進入阿卡的會員專區！🦥\n\n👉 https://liff.line.me/2008250851-egjPOXgO\n\n在這裡可以查看 VIP 方案、管理會員資訊，慢慢來不急～")
-
-    return None
+WELCOME_TEXT = (
+    "嗨嗨～歡迎來到伸懶腰的世界...🦥✨\n\n"
+    "我是阿卡，一隻很愛伸懶腰的樹懶...🌿\n"
+    "以後有什麼想問的，慢慢跟阿卡說就好囉～\n\n"
+    "想預約的話，點這裡 👉 https://ezpretty.cc/ycIvi\n"
+    "或是直接跟阿卡聊聊天也可以喔 🥱"
+)
 
 
 # ─────────────────────────────────────────────
@@ -716,124 +355,67 @@ def callback():
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     user_message = event.message.text
-    result = detect_keyword(user_message)
+    user_id = event.source.user_id
 
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
 
-        if result is None:
-            # 交給 AI 處理
-            reply_text = chatbot.generate_response(user_message)
+        # ──────────────────────────────────────
+        # 【任務一】前置攔截器：完全匹配關鍵字 → 直接回覆，零 API 成本
+        # ──────────────────────────────────────
+        intercepted = check_intercept(user_message)
+        if intercepted is not None:
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
-                    messages=[TextMessage(text=reply_text)]
+                    messages=intercepted
                 )
             )
-        elif result[0] == "url":
-            # 純文字預約連結
+            return
+
+        # ──────────────────────────────────────
+        # 【任務二 & 三】呼叫 LLM → 解析 JSON → 轉換 LINE 格式
+        # ──────────────────────────────────────
+        raw_response = call_llm(user_message)
+
+        try:
+            messages, should_notify = parse_llm_response(raw_response)
+
+            # 回覆用戶
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
-                    messages=[TextMessage(text=result[1])]
-                )
-            )
-        elif result[0] == "flex":
-            # Flex Message 卡片
-            flex_container = FlexContainer.from_dict(result[1])
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[
-                        FlexMessage(
-                            alt_text="阿卡為你整理的資訊卡片",
-                            contents=flex_container
-                        )
-                    ]
-                )
-            )
-        elif result[0] == "team":
-            # 師傅團隊介紹：先傳文字說明，再傳師傅大圖
-            intro_text = (
-                "🦥 阿卡來介紹我們的專業師傅團隊！\n\n"
-                "✨ 芸芸 — 啟動舒緩，回歸平衡\n"
-                "   國家美容技術士（乙/丙級），五年以上扎實經驗\n\n"
-                "✨ 大可 — 智慧洞察，突破不適\n"
-                "   台灣推拿整復協會養生保健 + 進階證書\n\n"
-                "✨ 阿YA — 柔式手法，壓力釋放\n"
-                "   傳統整復推拿技術士、A-Team柔式推拿菁英\n\n"
-                "✨ 阿駿 — 科班底蘊，重塑平衡\n"
-                "   仁德醫專復健科畢業，臨床實戰七年以上\n\n"
-                "✨ 阿瑜 — 溫柔以待，自在生活\n"
-                "   傳統整復推拿技術士、摩根整復大師班\n\n"
-                "每位師傅都持有專業證照，用心為你調理保養！\n"
-                "想預約指定師傅，歡迎來電或線上預約 👉 https://ezpretty.cc/ycIvi"
-            )
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[
-                        TextMessage(text=intro_text),
-                        ImageMessage(
-                            original_content_url=TEAM_PHOTO_URL,
-                            preview_image_url=TEAM_PHOTO_URL
-                        )
-                    ]
+                    messages=messages
                 )
             )
 
-        elif result[0] == "service_team":
-            # 服務/團隊：師傅介紹文字 + 師傅大圖 + 服務價目表（共 3 則，不超過 LINE 限制 5 則）
-            team_intro = (
-                "🦥 阿卡來介紹我們的專業師傅團隊！\n\n"
-                "✨ 芸芸 — 啟動舒緩，回歸平衡\n"
-                "   國家美容技術士（乙/丙級），五年以上扎實經驗\n\n"
-                "✨ 大可 — 智慧洞察，突破不適\n"
-                "   台灣推拿整復協會養生保健 + 進階證書\n\n"
-                "✨ 阿YA — 柔式手法，壓力釋放\n"
-                "   傳統整復推拿技術士、A-Team柔式推拿菁英\n\n"
-                "✨ 阿駿 — 科班底蘊，重塑平衡\n"
-                "   仁德醫專復健科畢業，臨床實戰七年以上\n\n"
-                "✨ 阿瑜 — 溫柔以待，自在生活\n"
-                "   傳統整復推拿技術士、摩根整復大師班"
-            )
-            price_text = (
-                "🦥 伸懶腰的服務項目與價格\n\n"
-                "📌 推拿整復\n"
-                "・簡單保養 30分鐘 $600\n"
-                "・全身保養 60分鐘 $1,100\n"
-                "・深層保養 90分鐘 $1,600\n"
-                "・大保養 120分鐘 $2,100\n\n"
-                "📌 深層肌筋膜油推\n"
-                "・基礎舒緩 60分鐘 $1,200\n"
-                "・深層平衡 90分鐘 $1,700\n"
-                "・深度修護 120分鐘 $2,200\n\n"
-                "🏋️ 運動修復專案\n"
-                "・運動後快速恢復套餐 90分鐘 $1,600\n"
-                "・深層肌筋膜放鬆套餐 135分鐘 $2,400\n"
-                "・全能運動放鬆套餐 150分鐘 $2,800\n\n"
-                "💼 上班小資族肩頸革命\n"
-                "・肩頸舒活體驗套餐 65分鐘 $1,300\n"
-                "・久坐全息放鬆套餐 105分鐘 $1,700\n"
-                "・全身經絡尊榮套餐 150分鐘 $2,600\n\n"
-                "⚒️ 重度勞動者專案\n"
-                "・筋骨快效舒緩套餐 90分鐘 $1,600\n"
-                "・深層強效放鬆套餐 135分鐘 $2,400\n"
-                "・元氣充足放鬆套餐 150分鐘 $2,800\n\n"
-                "想預約請點 👉 https://ezpretty.cc/ycIvi\n"
-                "有問題隨時問阿卡喔～🦥"
-            )
+            # 通知管理員（如果需要）
+            if should_notify:
+                aka_reply_text = ""
+                for m in messages:
+                    if isinstance(m, TextMessage):
+                        aka_reply_text = m.text
+                        break
+                notify_admin_message(user_id, user_message, aka_reply_text)
+
+        except (json.JSONDecodeError, ValueError, KeyError) as e:
+            # JSON 解析失敗 → 統一回覆
+            app.logger.error(f"JSON 解析失敗: {e}\n原始回覆: {raw_response}")
+            fallback_text = "哎呀...阿卡剛剛伸了個大懶腰睡著了...🥱 請問可以再說一次嗎？🌿"
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
-                    messages=[
-                        TextMessage(text=team_intro),
-                        ImageMessage(
-                            original_content_url=TEAM_PHOTO_URL,
-                            preview_image_url=TEAM_PHOTO_URL
-                        ),
-                        TextMessage(text=price_text)
-                    ]
+                    messages=[TextMessage(text=fallback_text)]
+                )
+            )
+
+        except Exception as e:
+            # 其他未預期錯誤
+            app.logger.error(f"處理訊息時發生未預期錯誤: {e}\n{traceback.format_exc()}")
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text="哎呀...阿卡剛剛伸了個大懶腰睡著了...🥱 請問可以再說一次嗎？🌿")]
                 )
             )
 
@@ -842,17 +424,19 @@ def handle_message(event):
 def handle_follow(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
-        welcome_message = chatbot.get_welcome_message()
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=welcome_message)]
+                messages=[
+                    TextMessage(text=WELCOME_TEXT),
+                    ImageMessage(
+                        original_content_url=AKA_IMAGE_URL,
+                        preview_image_url=AKA_IMAGE_URL
+                    )
+                ]
             )
         )
 
 
 if __name__ == "__main__":
-    if "OPENAI_API_KEY" not in os.environ:
-        print("錯誤：OPENAI_API_KEY 環境變數未設定。請先設定此變數再執行。")
-        exit(1)
     app.run(host="0.0.0.0", port=5000)
