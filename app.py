@@ -203,7 +203,8 @@ def call_llm(user_message: str) -> str:
     - 一般 Exception：記錄 error + traceback，回傳預設 fallback JSON
     任何情況下都不會讓函式回傳 None 或拋出例外，確保 webhook 不會 500。
     """
-    app.logger.info(f"[LLM] 呼叫模型={_GEMINI_MODEL} 輸入={user_message[:50]}")
+    key_hint = (GEMINI_API_KEY or "")[:8] + "..."
+    app.logger.info(f"[LLM] 呼叫模型={_GEMINI_MODEL} key={key_hint} 輸入={user_message[:50]}")
     try:
         response = gemini_client.models.generate_content(
             model=_GEMINI_MODEL,
@@ -224,11 +225,16 @@ def call_llm(user_message: str) -> str:
         status_code = getattr(e, 'status_code', None) or getattr(e, 'code', None)
         error_str = str(e)
         if status_code == 429 or '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str:
-            app.logger.warning(f"[LLM] Gemini API 429 限流 | model={_GEMINI_MODEL} | {error_str[:200]}")
+            app.logger.warning(f"[LLM] Gemini API 429 限流 | model={_GEMINI_MODEL} | {error_str[:300]}")
         elif status_code == 404 or '404' in error_str or 'NOT_FOUND' in error_str:
-            app.logger.error(f"[LLM] Gemini API 404 模型不存在 | model={_GEMINI_MODEL} | {error_str[:200]}")
+            app.logger.error(f"[LLM] Gemini API 404 模型不存在 | model={_GEMINI_MODEL} | {error_str[:300]}")
+        elif status_code == 400 or '400' in error_str or 'INVALID_ARGUMENT' in error_str:
+            app.logger.error(f"[LLM] Gemini API 400 請求格式錯誤 | model={_GEMINI_MODEL} | {error_str[:400]}")
+            app.logger.error(traceback.format_exc())
+        elif status_code == 403 or '403' in error_str or 'PERMISSION_DENIED' in error_str:
+            app.logger.error(f"[LLM] Gemini API 403 API Key 無效或無權限 | key={key_hint} | model={_GEMINI_MODEL} | {error_str[:300]}")
         else:
-            app.logger.error(f"[LLM] Gemini API ClientError | HTTP {status_code} | model={_GEMINI_MODEL} | {error_str[:300]}")
+            app.logger.error(f"[LLM] Gemini API ClientError | HTTP {status_code} | model={_GEMINI_MODEL} | {error_str[:400]}")
             app.logger.error(traceback.format_exc())
         return _LLM_FALLBACK_JSON
 
@@ -355,14 +361,19 @@ def parse_llm_response(raw_response: str):
     action = data.get("action", "none")
     notify_admin = data.get("notify_admin", False)
 
-    # 統一合併為 url 列表
+    # 統一合併為 url 列表（防呆：空字串、None、非 https:// 一律過濾）
     all_image_urls = []
-    if image_url_single and isinstance(image_url_single, str) and image_url_single.startswith("http"):
-        all_image_urls.append(image_url_single)
-    if image_urls and isinstance(image_urls, list):
-        for u in image_urls:
-            if u and isinstance(u, str) and u.startswith("http"):
-                all_image_urls.append(u)
+    for candidate_url in ([image_url_single] if image_url_single else []) + (image_urls if isinstance(image_urls, list) else []):
+        if not candidate_url:
+            app.logger.debug(f"[IMG] 跳過空 URL")
+            continue
+        if not isinstance(candidate_url, str):
+            app.logger.warning(f"[IMG] 跳過非字串 URL: {type(candidate_url)}")
+            continue
+        if not candidate_url.startswith("https://"):
+            app.logger.warning(f"[IMG] 跳過非 https URL: {candidate_url[:80]}")
+            continue
+        all_image_urls.append(candidate_url)
 
     messages = []
 
@@ -370,16 +381,17 @@ def parse_llm_response(raw_response: str):
     if text:
         messages.append(TextMessage(text=text))
 
-    # 2. 圖片訊息（確保 URL 以 .jpg/.png/.jpeg/.gif 結尾，為直接圖片連結）
+    # 2. 圖片訊息（確保 URL 以 .jpg/.png/.jpeg/.gif/.webp 結尾，為直接圖片連結）
     for url in all_image_urls:
         lower_url = url.lower().split("?")[0]  # 去掉 query string 後判斷副檔名
         if any(lower_url.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]):
+            app.logger.info(f"[IMG] 發送圖片: {url[-60:]}")
             messages.append(ImageMessage(
                 original_content_url=url,
                 preview_image_url=url
             ))
         else:
-            app.logger.warning(f"跳過非直接圖片 URL: {url}")
+            app.logger.warning(f"[IMG] 跳過非直接圖片 URL（無有效副檔名）: {url[:80]}")
 
     # 3. 預約 Flex Message
     if action == "send_booking_flex":
