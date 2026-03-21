@@ -113,6 +113,38 @@ SYSTEM_PROMPT = """你是「阿卡」，伸懶腰傳統整復推拿會館的 AI 
 }
 注意：image_url 和 image_urls 擇一使用，不需要兩個都填。
 
+【⚠️ 圖片 URL 嚴格限制 - 絕對禁止自行生成 URL】
+image_url 或 image_urls 中的值，只能從以下「合法圖片清單」中選擇，絕對不能使用清單以外的任何 URL（包含 imgur、flaticon、unsplash 等外部網站）。如果情境不需要圖片，必須填入空字串 ""。
+
+合法圖片清單（BASE = https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images）：
+- aka.png                   → 阿卡主圖、歡迎、優惠活動入口
+- aka-service.png           → 服務選單入口圖
+- aka-recommend.png         → 推薦套餐入口圖
+- aka-system-building.png   → 店內資訊/系統建置中
+- vip-promo.jpg             → VIP 優惠活動
+- exchange-1.png            → 換購活動圖1（搭配 exchange-2.png 一起發）
+- exchange-2.png            → 換購活動圖2
+- centenary-1.jpg           → 百日慶活動圖1（搭配2、3一起發）
+- centenary-2.png           → 百日慶活動圖2
+- centenary-3.png           → 百日慶活動圖3
+- IMG-6192.jpg              → 交通位置地圖
+- IMG-6739.jpg              → 總價目表圖1（搭配 IMG-6738.jpg 一起發）
+- IMG-6738.jpg              → 總價目表圖2
+- IMG-6995.png              → 第一次來推薦套餐
+- IMG-6996.jpg              → 深層肌筋膜油推
+- IMG-7186.jpg              → 頭部整復SPA
+- IMG-7137.jpg              → 上班小資族套餐
+- IMG-7133.png              → 運動修復套餐
+- IMG-7132.png              → 重度勞動者套餐
+- team-photo.jpg            → 師傅團隊大合照
+- master-ayu.jpg            → 師傅阿瑜介紹圖
+- master-dake.jpg           → 師傅大可介紹圖
+- master-aya.jpg            → 師傅阿YA介紹圖
+- master-yunyun.jpg         → 師傅芸芸介紹圖
+- master-ajun.jpg           → 師傅阿駿介紹圖
+
+完整 URL 格式範例：https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka.png
+
 【圖文選單與互動對話邏輯】
 
 🟢 情境一：優惠活動引導
