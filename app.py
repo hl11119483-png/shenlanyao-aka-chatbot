@@ -186,21 +186,25 @@ SYSTEM_PROMPT = """你是「阿卡」，伸懶腰傳統整復推拿會館的 AI 
 _LLM_FALLBACK_JSON = '{"text": "阿卡現在有點累了，正在閉目養神 \ud83d\ude34 請您晚點再傳訊息給我喔！", "image_url": ""}'
 
 
+# 目前此 API Key 可用的模型：gemini-2.5-flash-lite（成本最低）、gemini-2.5-flash
+# 注意：gemini-2.0-flash 系列對新用戶已停用（404 NOT_FOUND）
+_GEMINI_MODEL = "gemini-2.5-flash-lite"
+
+
 def call_llm(user_message: str) -> str:
     """呼叫 Google Gemini API，回傳原始回覆字串（強制 JSON 格式）。
 
     錯誤處理策略：
     - 429 Too Many Requests (ClientError)：記錄 warning，回傳預設 fallback JSON
-    - 其他 ClientError：記錄 error，回傳預設 fallback JSON
+    - 其他 ClientError：記錄完整 error + status_code，回傳預設 fallback JSON
     - 一般 Exception：記錄 error + traceback，回傳預設 fallback JSON
     任何情況下都不會讓函式回傳 None 或拋出例外，確保 webhook 不會 500。
     """
+    app.logger.info(f"[LLM] 呼叫模型={_GEMINI_MODEL} 輸入={user_message[:50]}")
     try:
         response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[
-                {"role": "user", "parts": [{"text": user_message}]}
-            ],
+            model=_GEMINI_MODEL,
+            contents=user_message,
             config=genai.types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 response_mime_type="application/json",
@@ -209,21 +213,24 @@ def call_llm(user_message: str) -> str:
             )
         )
         raw = response.text.strip()
-        app.logger.info(f"LLM 原始回覆: {raw}")
+        app.logger.info(f"[LLM] 原始回覆: {raw[:200]}")
         return raw
 
     except genai.errors.ClientError as e:
-        # 捕捉 Gemini API 客戶端錯誤（含 429 Too Many Requests）
+        # 捕捉 Gemini API 客戶端錯誤（含 429 Too Many Requests、404 NOT_FOUND 等）
         status_code = getattr(e, 'status_code', None) or getattr(e, 'code', None)
-        if status_code == 429 or '429' in str(e) or 'RESOURCE_EXHAUSTED' in str(e):
-            app.logger.warning(f"Gemini API 429 限流：{e}")
+        error_str = str(e)
+        if status_code == 429 or '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str:
+            app.logger.warning(f"[LLM] Gemini API 429 限流 | model={_GEMINI_MODEL} | {error_str[:200]}")
+        elif status_code == 404 or '404' in error_str or 'NOT_FOUND' in error_str:
+            app.logger.error(f"[LLM] Gemini API 404 模型不存在 | model={_GEMINI_MODEL} | {error_str[:200]}")
         else:
-            app.logger.error(f"Gemini API ClientError (HTTP {status_code}): {e}")
+            app.logger.error(f"[LLM] Gemini API ClientError | HTTP {status_code} | model={_GEMINI_MODEL} | {error_str[:300]}")
             app.logger.error(traceback.format_exc())
         return _LLM_FALLBACK_JSON
 
     except Exception as e:
-        app.logger.error(f"Gemini API 呼叫失敗 ({type(e).__name__}): {e}")
+        app.logger.error(f"[LLM] 未預期錯誤 | {type(e).__name__} | model={_GEMINI_MODEL} | {e}")
         app.logger.error(traceback.format_exc())
         return _LLM_FALLBACK_JSON
 
