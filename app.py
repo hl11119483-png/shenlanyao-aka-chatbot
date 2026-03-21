@@ -182,11 +182,22 @@ SYSTEM_PROMPT = """你是「阿卡」，伸懶腰傳統整復推拿會館的 AI 
 {"text": "哎呀...阿卡的小腦袋轉不過來了...🌿 阿卡已經呼叫真人客服來幫你囉，或者你也可以直接打電話 0979-592-099 找我們...🥱", "action": "none", "notify_admin": true}"""
 
 
+# 當 API 出現限流或錯誤時，回傳給用戶的預設 JSON 字串
+_LLM_FALLBACK_JSON = '{"text": "阿卡現在有點累了，正在閉目養神 \ud83d\ude34 請您晚點再傳訊息給我喔！", "image_url": ""}'
+
+
 def call_llm(user_message: str) -> str:
-    """呼叫 Google Gemini API，回傳原始回覆字串（強制 JSON 格式）。"""
+    """呼叫 Google Gemini API，回傳原始回覆字串（強制 JSON 格式）。
+
+    錯誤處理策略：
+    - 429 Too Many Requests (ClientError)：記錄 warning，回傳預設 fallback JSON
+    - 其他 ClientError：記錄 error，回傳預設 fallback JSON
+    - 一般 Exception：記錄 error + traceback，回傳預設 fallback JSON
+    任何情況下都不會讓函式回傳 None 或拋出例外，確保 webhook 不會 500。
+    """
     try:
         response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash",
             contents=[
                 {"role": "user", "parts": [{"text": user_message}]}
             ],
@@ -200,10 +211,21 @@ def call_llm(user_message: str) -> str:
         raw = response.text.strip()
         app.logger.info(f"LLM 原始回覆: {raw}")
         return raw
+
+    except genai.errors.ClientError as e:
+        # 捕捉 Gemini API 客戶端錯誤（含 429 Too Many Requests）
+        status_code = getattr(e, 'status_code', None) or getattr(e, 'code', None)
+        if status_code == 429 or '429' in str(e) or 'RESOURCE_EXHAUSTED' in str(e):
+            app.logger.warning(f"Gemini API 429 限流：{e}")
+        else:
+            app.logger.error(f"Gemini API ClientError (HTTP {status_code}): {e}")
+            app.logger.error(traceback.format_exc())
+        return _LLM_FALLBACK_JSON
+
     except Exception as e:
-        app.logger.error(f"Gemini API 呼叫失敗: {type(e).__name__}: {e}")
+        app.logger.error(f"Gemini API 呼叫失敗 ({type(e).__name__}): {e}")
         app.logger.error(traceback.format_exc())
-        return None
+        return _LLM_FALLBACK_JSON
 
 
 # ─────────────────────────────────────────────
