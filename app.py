@@ -11,7 +11,7 @@ from linebot.v3.messaging import (
     ImageMessage
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
-from openai import OpenAI
+from google import genai
 
 app = Flask(__name__)
 
@@ -20,19 +20,19 @@ app = Flask(__name__)
 # ─────────────────────────────────────────────
 CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
 CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 ADMIN_LINE_USER_ID = os.environ.get("ADMIN_LINE_USER_ID", "")
 
 if not CHANNEL_ACCESS_TOKEN:
     raise ValueError("LINE_CHANNEL_ACCESS_TOKEN environment variable not set.")
 if not CHANNEL_SECRET:
     raise ValueError("LINE_CHANNEL_SECRET environment variable not set.")
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY environment variable not set.")
+if not GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY environment variable not set.")
 
 handler = WebhookHandler(CHANNEL_SECRET)
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ─────────────────────────────────────────────
 # 常數：圖片 URL
@@ -126,23 +126,25 @@ SYSTEM_PROMPT = """【角色設定與最高指導原則】
 
 
 def call_llm(user_message: str) -> str:
-    """呼叫 OpenAI LLM API，回傳原始回覆字串。"""
+    """呼叫 Google Gemini API，回傳原始回覆字串（強制 JSON 格式）。"""
     try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message}
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                {"role": "user", "parts": [{"text": user_message}]}
             ],
-            response_format={"type": "json_object"},
-            max_tokens=512,
-            temperature=0.7
+            config=genai.types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                max_output_tokens=512,
+                temperature=0.7
+            )
         )
-        raw = response.choices[0].message.content.strip()
+        raw = response.text.strip()
         app.logger.info(f"LLM 原始回覆: {raw}")
         return raw
     except Exception as e:
-        app.logger.error(f"LLM API 呼叫失敗: {type(e).__name__}: {e}")
+        app.logger.error(f"Gemini API 呼叫失敗: {type(e).__name__}: {e}")
         app.logger.error(traceback.format_exc())
         return None
 
