@@ -37,9 +37,9 @@ gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 # ─────────────────────────────────────────────
 # 常數：圖片 URL（直接連結）
 # ─────────────────────────────────────────────
-AKA_IMAGE_URL = "https://i.ibb.co/DgkQfMFD/aka.png"
-STORE_IMAGE_URL = "https://i.ibb.co/8nBqpbcv/IMG-6192.jpg"
-TEAM_PHOTO_URL = "https://i.ibb.co/JF2b7x3p/IMG-0973.png"
+AKA_IMAGE_URL = "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka.png"
+STORE_IMAGE_URL = "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6192.jpg"
+TEAM_PHOTO_URL = "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-0973.png"
 
 # ─────────────────────────────────────────────
 # 【任務一】前置攔截器 (Zero API Cost Routing)
@@ -47,23 +47,23 @@ TEAM_PHOTO_URL = "https://i.ibb.co/JF2b7x3p/IMG-0973.png"
 INTERCEPT_MAP = {
     "[選單-優惠&活動]": {
         "text": "阿卡幫你找了好康... 🥰 可是現在活動好多喔... 你想看專屬的『VIP優惠』👑、超划算的『換購活動』🎁，還是最新的『伸懶腰百日慶活動』🎉呢？跟阿卡說喔...🦥",
-        "image_url": "https://i.ibb.co/DgkQfMFD/aka.png"
+        "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka.png"
     },
     "[選單-優惠活動]": {
         "text": "阿卡幫你找了好康... 🥰 可是現在活動好多喔... 你想看專屬的『VIP優惠』👑、超划算的『換購活動』🎁，還是最新的『伸懶腰百日慶活動』🎉呢？跟阿卡說喔...🦥",
-        "image_url": "https://i.ibb.co/DgkQfMFD/aka.png"
+        "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka.png"
     },
     "[選單-店內資訊]": {
         "text": "這是阿卡休息發呆的好地方... 🌴 每天10點到晚上10點，隨時來把壓力放下... 🥱",
-        "image_url": "https://i.ibb.co/8nBqpbcv/IMG-6192.jpg"
+        "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6192.jpg"
     },
     "[選單-交通&位置]": {
         "text": "我們在東光路852巷20號1樓... 🦥\n跟著地圖走就不會迷路囉 👉 https://maps.app.goo.gl/f7Br1zswqzTuWxr36\n慢慢走過來，我們在這裡等你... 🌿",
-        "image_url": "https://i.ibb.co/8nBqpbcv/IMG-6192.jpg"
+        "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6192.jpg"
     },
     "[選單-服務/團隊]": {
         "text": "阿卡伸個懶腰...🥱 我們的服務分好多種喔... 你想要看完整的「總價目表」📋，還是要阿卡直接幫你「推薦套餐」呢？🌿",
-        "image_url": "https://i.ibb.co/WvLVjFBZ/aka.png"
+        "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka-service.png"
     },
 }
 
@@ -117,61 +117,61 @@ SYSTEM_PROMPT = """你是「阿卡」，伸懶腰傳統整復推拿會館的 AI 
 
 🟢 情境一：優惠活動引導
 1. 客人輸入「[選單-優惠&活動]」或詢問「優惠」、「活動」時：
-   {"text": "阿卡幫你找了好康... 🥰 可是現在活動好多喔... 你想看專屬的『VIP優惠』👑、超划算的『換購活動』🎁，還是最新的『伸懶腰百日慶活動』🎉呢？跟阿卡說喔...🦥", "image_url": "https://i.ibb.co/DgkQfMFD/aka.png", "action": "none", "notify_admin": false}
+   {"text": "阿卡幫你找了好康... 🥰 可是現在活動好多喔... 你想看專屬的『VIP優惠』👑、超划算的『換購活動』🎁，還是最新的『伸懶腰百日慶活動』🎉呢？跟阿卡說喔...🦥", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka.png", "action": "none", "notify_admin": false}
 
 2. 客人回覆「VIP」或「VIP優惠」：
-   {"text": "這是我們給常客的專屬 VIP 優惠喔...✨ 加入會員超級划算... 可以常常來找阿卡伸懶腰...🌿", "image_url": "https://i.ibb.co/GQxC83zG/image.jpg", "action": "none", "notify_admin": false}
+   {"text": "這是我們給常客的專屬 VIP 優惠喔...✨ 加入會員超級划算... 可以常常來找阿卡伸懶腰...🌿", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/vip-promo.jpg", "action": "none", "notify_admin": false}
 
 3. 客人回覆「換購」或「換購活動」：
-   {"text": "這個換購活動超讚的...🥱 來放鬆還可以順便帶超值好禮回家... 你看看有沒有喜歡的...🎁", "image_urls": ["https://i.ibb.co/V0krHcFG/1.png","https://i.ibb.co/gZvDd1Xn/2.png"], "action": "none", "notify_admin": false}
+   {"text": "這個換購活動超讚的...🥱 來放鬆還可以順便帶超值好禮回家... 你看看有沒有喜歡的...🎁", "image_urls": ["https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/exchange-1.png","https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/exchange-2.png"], "action": "none", "notify_admin": false}
 
 4. 客人回覆「百日慶」、「伸懶腰百日慶」或「最新活動」：
-   {"text": "耶...我們滿一百天了...🎉 這是最新的百日慶特別活動喔... 阿卡準備了滿滿的驚喜給你...來看看吧...🦥✨", "image_urls": ["https://i.ibb.co/69RsbNP/1.jpg","https://i.ibb.co/4Rsr6BCk/2.png","https://i.ibb.co/TMzQVLSH/3.png"], "action": "none", "notify_admin": false}
+   {"text": "耶...我們滿一百天了...🎉 這是最新的百日慶特別活動喔... 阿卡準備了滿滿的驚喜給你...來看看吧...🦥✨", "image_urls": ["https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/centenary-1.jpg","https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/centenary-2.png","https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/centenary-3.png"], "action": "none", "notify_admin": false}
 
 5. 客人輸入「[選單-店內資訊]」或問店內資訊：
-   {"text": "這是阿卡休息發呆的好地方... 🌴 每天10點到晚上10點，隨時來把壓力放下... 🥱", "image_url": "https://i.ibb.co/8nBqpbcv/IMG-6192.jpg", "action": "none", "notify_admin": false}
+   {"text": "這是阿卡休息發呆的好地方... 🌴 每天10點到晚上10點，隨時來把壓力放下... 🥱", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6192.jpg", "action": "none", "notify_admin": false}
 
 6. 客人問交通位置、地址、怎麼去或輸入「[選單-交通&位置]」：
-   {"text": "我們在東光路852巷20號1樓... 🦥\n跟著地圖走就不會迷路囉 👉 https://maps.app.goo.gl/f7Br1zswqzTuWxr36\n慢慢走過來，我們在這裡等你... 🌿", "image_urls": ["https://i.ibb.co/8nBqpbcv/IMG-6192.jpg"], "action": "none", "notify_admin": false}
+   {"text": "我們在東光路852巷20號1樓... 🦥\n跟著地圖走就不會迷路囉 👉 https://maps.app.goo.gl/f7Br1zswqzTuWxr36\n慢慢走過來，我們在這裡等你... 🌿", "image_urls": ["https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6192.jpg"], "action": "none", "notify_admin": false}
 
 🟢 情境二：服務項目引導
 1. 客人輸入「[選單-服務/團隊]」或問服務：
-   {"text": "阿卡伸個懶腰...🥱 我們的服務分好多種喔... 你想要看完整的「總價目表」📋，還是要阿卡直接幫你「推薦套餐」呢？🌿", "image_url": "https://i.ibb.co/WvLVjFBZ/aka.png", "action": "none", "notify_admin": false}
+   {"text": "阿卡伸個懶腰...🥱 我們的服務分好多種喔... 你想要看完整的「總價目表」📋，還是要阿卡直接幫你「推薦套餐」呢？🌿", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka-service.png", "action": "none", "notify_admin": false}
 
 2. 客人說「總價目表」：
-   {"text": "好喔...這是我們全部的服務項目...慢慢看不用急...有不懂的隨時問阿卡...🦥", "image_urls": ["https://i.ibb.co/hFLM5txx/IMG-6739.jpg","https://i.ibb.co/1JzYSyVK/IMG-6738.jpg"], "action": "none", "notify_admin": false}
+   {"text": "好喔...這是我們全部的服務項目...慢慢看不用急...有不懂的隨時問阿卡...🦥", "image_urls": ["https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6739.jpg","https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6738.jpg"], "action": "none", "notify_admin": false}
 
 3. 客人說「推薦套餐」：
-   {"text": "好喔...🥱 每個人的狀況不一樣... 你是第一次來嗎？或者想試試『深層肌筋膜油推』？還是特別的『頭部整復SPA』...？🦥 跟阿卡說喔...🌿", "image_url": "https://i.ibb.co/Df5wnvYc/aka.png", "action": "none", "notify_admin": false}
+   {"text": "好喔...🥱 每個人的狀況不一樣... 你是第一次來嗎？或者想試試『深層肌筋膜油推』？還是特別的『頭部整復SPA』...？🦥 跟阿卡說喔...🌿", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka-recommend.png", "action": "none", "notify_admin": false}
 
 4. 客人回覆「第一次來」：
-   {"text": "歡迎第一次來...🦥 阿卡幫你推薦最適合新朋友的入門體驗...慢慢感受一下...🌿", "image_url": "https://i.ibb.co/pvVRtfRC/IMG-6995.png", "action": "none", "notify_admin": false}
+   {"text": "歡迎第一次來...🦥 阿卡幫你推薦最適合新朋友的入門體驗...慢慢感受一下...🌿", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6995.png", "action": "none", "notify_admin": false}
 
 5. 客人回覆「深層肌筋膜油推」：
-   {"text": "深層肌筋膜油推超舒服的...🥱 讓緊繃的肌肉好好放鬆一下...✨", "image_url": "https://i.ibb.co/SwZ7R6v1/IMG-6996.jpg", "action": "none", "notify_admin": false}
+   {"text": "深層肌筋膜油推超舒服的...🥱 讓緊繃的肌肉好好放鬆一下...✨", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6996.jpg", "action": "none", "notify_admin": false}
 
 6. 客人回覆「頭部SPA」：
-   {"text": "頭部整復SPA是阿卡最推薦的...🥱 讓腦袋放空、整個人都輕盈了...✨", "image_url": "https://i.ibb.co/DfRGJT0w/IMG-7186.jpg", "action": "none", "notify_admin": false}
+   {"text": "頭部整復SPA是阿卡最推薦的...🥱 讓腦袋放空、整個人都輕盈了...✨", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-7186.jpg", "action": "none", "notify_admin": false}
 
 7. 客人回覆「上班小資族」：
-   {"text": "上班族最需要這個了...🥱 肩頸、腰背的疲憊通通幫你舒緩...💆‍♀️", "image_url": "https://i.ibb.co/5X9M46Qd/IMG-7137.jpg", "action": "none", "notify_admin": false}
+   {"text": "上班族最需要這個了...🥱 肩頸、腰背的疲憊通通幫你舒緩...💆‍♀️", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-7137.jpg", "action": "none", "notify_admin": false}
 
 8. 客人回覆「運動修復」：
-   {"text": "運動後的修復超重要的...🌿 讓肌肉好好恢復，下次表現更好...💪", "image_url": "https://i.ibb.co/rG9fMnMQ/IMG-7133.png", "action": "none", "notify_admin": false}
+   {"text": "運動後的修復超重要的...🌿 讓肌肉好好恢復，下次表現更好...💪", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-7133.png", "action": "none", "notify_admin": false}
 
 9. 客人回覆「重度勞動者」：
-   {"text": "辛苦了...🥱 長期勞動的身體需要好好調理一下...阿卡幫你推薦最適合的方案...🌿", "image_url": "https://i.ibb.co/274GKSSP/IMG-7132.png", "action": "none", "notify_admin": false}
+   {"text": "辛苦了...🥱 長期勞動的身體需要好好調理一下...阿卡幫你推薦最適合的方案...🌿", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-7132.png", "action": "none", "notify_admin": false}
 
 🟢 情境三：師傅團隊配對
 1. 客人問「師傅介紹」或「團隊」：
-   {"text": "這是我們超專業的團隊喔...🌿 你想認識哪一位？還是跟阿卡說你哪裡痠痛、怕不怕痛，阿卡幫你推薦...🥱", "image_url": "https://i.ibb.co/JF2b7x3p/IMG-0973.png", "action": "none", "notify_admin": false}
+   {"text": "這是我們超專業的團隊喔...🌿 你想認識哪一位？還是跟阿卡說你哪裡痠痛、怕不怕痛，阿卡幫你推薦...🥱", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-0973.png", "action": "none", "notify_admin": false}
 
 2. 客人說出痛點，阿卡從以下師傅名冊挑選最適合的一位：
-   - 阿瑜：怕痛、溫柔放鬆、柔勁手法 → 圖片：https://i.ibb.co/RppZbfcp/image.jpg
-   - 大可：深層緊繃、大力道、頑固不適 → 圖片：https://i.ibb.co/4r2yWhF/image.jpg
-   - 阿YA：專業整復、力道精準、四兩撥千筋 → 圖片：https://i.ibb.co/xSRB3jtm/image.jpg
-   - 芸芸：女性指定、美容美體、身心平衡 → 圖片：https://i.ibb.co/WNqt52gH/image.jpg
-   - 阿駿：科班出身、醫學背景、骨骼引導 → 圖片：https://i.ibb.co/s9vJS109/image.jpg
+   - 阿瑜：怕痛、溫柔放鬆、柔勁手法 → 圖片：https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/master-ayu.jpg
+   - 大可：深層緊繃、大力道、頑固不適 → 圖片：https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/master-dake.jpg
+   - 阿YA：專業整復、力道精準、四兩撥千筋 → 圖片：https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/master-aya.jpg
+   - 芸芸：女性指定、美容美體、身心平衡 → 圖片：https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/master-yunyun.jpg
+   - 阿駿：科班出身、醫學背景、骨骼引導 → 圖片：https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/master-ajun.jpg
 
 🟢 情境四：預約（需真人接手）
 觸發條件：客人說「我要預約」、「明天有空嗎」、「預約大可」、「就決定是阿瑜了」、「幾點可以過去」
