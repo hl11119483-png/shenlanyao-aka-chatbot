@@ -39,7 +39,7 @@ gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 # ─────────────────────────────────────────────
 AKA_IMAGE_URL = "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka.png"
 STORE_IMAGE_URL = "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6192.jpg"
-TEAM_PHOTO_URL = "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-0973.png"
+TEAM_PHOTO_URL = "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/team-photo.jpg"
 
 # ─────────────────────────────────────────────
 # 【任務一】前置攔截器 (Zero API Cost Routing)
@@ -62,7 +62,7 @@ INTERCEPT_MAP = {
         "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6192.jpg"
     },
     "[選單-服務/團隊]": {
-        "text": "阿卡伸個懶腰...🥱 我們的服務分好多種喔... 你想要看完整的「總價目表」📋，還是要阿卡直接幫你「推薦套餐」呢？🌿",
+        "text": "阿卡伸個懶腰...🥱 我們的服務分好多種喔... 你想要看完整的「總價目表」📋、要阿卡直接幫你「推薦套餐」🌿，還是想認識我們的「伸懶腰專業團隊」👥呢？跟阿卡說喔...🦥",
         "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka-service.png"
     },
 }
@@ -136,7 +136,10 @@ SYSTEM_PROMPT = """你是「阿卡」，伸懶腰傳統整復推拿會館的 AI 
 
 🟢 情境二：服務項目引導
 1. 客人輸入「[選單-服務/團隊]」或問服務：
-   {"text": "阿卡伸個懶腰...🥱 我們的服務分好多種喔... 你想要看完整的「總價目表」📋，還是要阿卡直接幫你「推薦套餐」呢？🌿", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka-service.png", "action": "none", "notify_admin": false}
+   {"text": "阿卡伸個懶腰...🥱 我們的服務分好多種喔... 你想要看完整的「總價目表」📋、要阿卡直接幫你「推薦套餐」🌿，還是想認識我們的「伸懶腰專業團隊」👥呢？跟阿卡說喔...🦥", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka-service.png", "action": "none", "notify_admin": false}
+
+1.5. 客人說「伸懶腰專業團隊」、「認識團隊」、「師傅團隊」：
+   {"text": "這是我們超專業的團隊喔...🌿 你想認識哪一位？還是跟阿卡說你哪裡痠痛、怕不怕痛，阿卡幫你推薦...🥱", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/team-photo.jpg", "action": "none", "notify_admin": false}
 
 2. 客人說「總價目表」：
    {"text": "好喔...這是我們全部的服務項目...慢慢看不用急...有不懂的隨時問阿卡...🦥", "image_urls": ["https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6739.jpg","https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6738.jpg"], "action": "none", "notify_admin": false}
@@ -164,7 +167,7 @@ SYSTEM_PROMPT = """你是「阿卡」，伸懶腰傳統整復推拿會館的 AI 
 
 🟢 情境三：師傅團隊配對
 1. 客人問「師傅介紹」或「團隊」：
-   {"text": "這是我們超專業的團隊喔...🌿 你想認識哪一位？還是跟阿卡說你哪裡痠痛、怕不怕痛，阿卡幫你推薦...🥱", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-0973.png", "action": "none", "notify_admin": false}
+   {"text": "這是我們超專業的團隊喔...🌿 你想認識哪一位？還是跟阿卡說你哪裡痠痛、怕不怕痛，阿卡幫你推薦...🥱", "image_url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/team-photo.jpg", "action": "none", "notify_admin": false}
 
 2. 客人說出痛點，阿卡從以下師傅名冊挑選最適合的一位：
    - 阿瑜：怕痛、溫柔放鬆、柔勁手法 → 圖片：https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/master-ayu.jpg
