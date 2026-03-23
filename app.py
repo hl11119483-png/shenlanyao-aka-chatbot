@@ -640,28 +640,12 @@ def make_booking_flex():
     contents = {
         "type": "bubble",
         "size": "mega",
-        "header": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "image",
-                    "url": AKA_IMAGE_URL,
-                    "size": "80px",
-                    "align": "center"
-                },
-                {
-                    "type": "text",
-                    "text": "📅 阿卡幫你預約！",
-                    "weight": "bold",
-                    "size": "lg",
-                    "align": "center",
-                    "color": "#5C3D1E",
-                    "margin": "sm"
-                }
-            ],
-            "backgroundColor": "#FFF3E0",
-            "paddingAll": "16px"
+        "hero": {
+            "type": "image",
+            "url": "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka_booking.png",
+            "size": "full",
+            "aspectRatio": "20:13",
+            "aspectMode": "cover"
         },
         "body": {
             "type": "box",
@@ -682,9 +666,9 @@ def make_booking_flex():
                     "cornerRadius": "8px",
                     "paddingAll": "12px",
                     "contents": [
-                        {"type": "text", "text": "📍 台中市北屯區東光路852巷20號1F", "wrap": True, "size": "sm", "color": "#555555"},
+                        {"type": "text", "text": "📍 台中市北屯區東光路852巷20號", "wrap": True, "size": "sm", "color": "#555555"},
                         {"type": "text", "text": "📞 0979-592-099", "size": "sm", "color": "#555555", "margin": "sm"},
-                        {"type": "text", "text": "🕙 每天 10:00 - 22:00", "size": "sm", "color": "#555555", "margin": "sm"}
+                        {"type": "text", "text": "🕙 週一～週日 10:00-22:00", "size": "sm", "color": "#555555", "margin": "sm"}
                     ]
                 }
             ]
