@@ -1,6 +1,7 @@
 import os
 import json
 import traceback
+import threading
 from datetime import datetime
 import pytz
 from flask import Flask, request, abort
@@ -42,6 +43,7 @@ gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 AKA_IMAGE_URL = "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka.png"
 STORE_IMAGE_URL = "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/IMG-6192.jpg"
 TEAM_PHOTO_URL = "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/team-photo.jpg"
+AKA_BADMINTON_URL = "https://raw.githubusercontent.com/hl11119483-png/shenlanyao-aka-chatbot/main/assets/images/aka_badminton.png"
 
 # ─────────────────────────────────────────────
 # 【任務一】前置攔截器 (Zero API Cost Routing)
@@ -82,6 +84,71 @@ _CMD_AKA_OFF = "*阿卡退下*"
 _CMD_AKA_ON  = "*阿卡上工*"
 
 
+def _wakeup_push_message(user_id: str):
+    """
+    背景計時器到期後的回呼函式。
+    雙重檢查：
+      1. 該用戶 mode 是否仍為 HUMAN_MODE
+      2. last_active_time 距今是否已超過 60 秒
+    若皆符合 → 切回 AI_MODE + Push Message 圖文推播。
+    """
+    now = datetime.now(pytz.timezone("Asia/Taipei"))
+    session = USER_MODE_SESSION.get(user_id)
+
+    if not session or session.get("mode") != "HUMAN_MODE":
+        app.logger.info(f"[WAKEUP] 用戶 {user_id} 已不在 HUMAN_MODE，跳過推播")
+        return
+
+    elapsed = (now - session["last_active_time"]).total_seconds()
+    if elapsed < _HUMAN_MODE_TIMEOUT_SEC:
+        # 活動時間被刷新過（老闆仍在對話中），重新排程
+        remaining = _HUMAN_MODE_TIMEOUT_SEC - elapsed
+        app.logger.info(f"[WAKEUP] 用戶 {user_id} 活動時間被刷新（{elapsed:.0f}s），重新排程 {remaining:.0f}s")
+        t = threading.Timer(remaining, _wakeup_push_message, args=[user_id])
+        t.daemon = True
+        t.start()
+        return
+
+    # ── 雙重條件皆符合 → 執行喚醒 ──
+    # 動作 A：狀態重置
+    USER_MODE_SESSION[user_id] = {"mode": "AI_MODE", "last_active_time": now}
+    app.logger.info(f"[WAKEUP] 用戶 {user_id} HUMAN_MODE 超時 {elapsed:.0f}s → 自動切回 AI_MODE + 推播")
+
+    # 動作 B：Push Message 圖文推播
+    wakeup_text = (
+        "阿卡剛剛跟好朋友去廝殺一場羽球啦... 🥱\n"
+        "呼～流汗真舒服...💦\n"
+        "現在回來伸懶腰囉...\n"
+        "有什麼問題可以再問阿卡喔... 🦥🌿"
+    )
+    try:
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.push_message(
+                PushMessageRequest(
+                    to=user_id,
+                    messages=[
+                        ImageMessage(
+                            original_content_url=AKA_BADMINTON_URL,
+                            preview_image_url=AKA_BADMINTON_URL
+                        ),
+                        TextMessage(text=wakeup_text)
+                    ]
+                )
+            )
+            app.logger.info(f"[WAKEUP] 已向用戶 {user_id} 發送阿卡打羽球推播")
+    except Exception as e:
+        app.logger.error(f"[WAKEUP] 推播失敗: {type(e).__name__}: {e}")
+
+
+def _start_wakeup_timer(user_id: str):
+    """啟動背景延遲計時任務（60 秒後觸發雙重檢查 + 推播）。"""
+    t = threading.Timer(_HUMAN_MODE_TIMEOUT_SEC, _wakeup_push_message, args=[user_id])
+    t.daemon = True
+    t.start()
+    app.logger.info(f"[TIMER] 已為用戶 {user_id} 啟動 {_HUMAN_MODE_TIMEOUT_SEC}s 背景計時器")
+
+
 def check_mode_switch(user_id: str, text: str):
     """
     AI / 真人切換狀態攔截器。
@@ -97,6 +164,7 @@ def check_mode_switch(user_id: str, text: str):
     if stripped == _CMD_AKA_OFF:
         USER_MODE_SESSION[user_id] = {"mode": "HUMAN_MODE", "last_active_time": now}
         app.logger.info(f"[MODE] 用戶 {user_id} → HUMAN_MODE（老闆接手）")
+        _start_wakeup_timer(user_id)
         return "skip"
 
     if stripped == _CMD_AKA_ON:
@@ -884,6 +952,7 @@ def handle_message(event):
                 now = datetime.now(pytz.timezone("Asia/Taipei"))
                 USER_MODE_SESSION[user_id] = {"mode": "HUMAN_MODE", "last_active_time": now}
                 app.logger.info(f"[MODE] 用戶 {user_id} → HUMAN_MODE（預約通知連動）")
+                _start_wakeup_timer(user_id)
 
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             # JSON 解析失敗 → 統一回覆
